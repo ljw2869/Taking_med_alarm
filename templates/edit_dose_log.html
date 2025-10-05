@@ -1,0 +1,28 @@
+<div style="border: 2px solid #007BFF; background-color: #E9F5FF; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+  <strong>ℹ️ 안내:</strong><br>
+  이 화면은 <b>여행 추가 수령을 위해 수령 기록을 수정</b>하는 페이지입니다.<br>
+  기존 수령일, 기존 수령 주차, 여행으로 인한 추가 주차, 메모를 변경할 수 있습니다.<br>
+  여행으로 인해 추가 수령한 주차만큼 <b>복용 알림이 앞으로 당겨집니다</b>.<br>
+  메모에 추가 수령일자를 기록해두기를 <span style="color:red; font-weight:bold;">권장</span>합니다.<br>
+  수정 후에는 반드시 <b>"수정 저장"</b> 버튼을 눌러주세요.
+</div>
+
+<h2>수령 기록 수정</h2>
+<form method="POST">
+  <input type="hidden" name="customer_id" value="{{ dose_log.customer_id }}">
+    
+  <label for="taken_date">수령일:</label>
+  <input type="date" name="taken_date" value="{{ dose_log['taken_date'] }}" required><br>
+
+  <label for="taken_week">수령 주차:</label>
+  <input type="number" name="taken_week" value="{{ dose_log['taken_week'] }}" required><br>
+
+  <label for="extra_weeks">여행 추가 주차:</label>
+  <input type="number" name="extra_weeks" value="{{ dose_log['extra_weeks'] }}" min="0"><br>
+
+  <label for="note">메모:</label><br>
+  <input type="text" name="note" value="{{ dose_log['note'] }}"><br><br>
+
+  <button type="submit">수정 저장</button>
+  <a href="{{ url_for('view_customer', customer_id=dose_log['customer_id']) }}">← 돌아가기</a>
+</form>

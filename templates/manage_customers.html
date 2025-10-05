@@ -1,0 +1,22 @@
+<h2>고객 관리</h2>
+<form method="POST">
+  <table border="1" cellpadding="8">
+    <tr>
+      <th>활성화</th>
+      <th>이름</th>
+      <th>연락처</th>
+    </tr>
+    {% for cust in customers %}
+    <tr>
+      <td>
+        <input type="checkbox" name="active_customers" value="{{ cust[0] }}"
+               {% if cust[3] == 1 %}checked{% endif %}>
+      </td>
+      <td>{{ cust[1] }}</td>
+      <td>{{ cust[2] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <button type="submit">저장</button>
+</form>
+<a href="{{ url_for('index') }}">← 홈으로</a>

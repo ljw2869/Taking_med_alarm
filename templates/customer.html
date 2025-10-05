@@ -1,0 +1,70 @@
+<h2>{{customer[1]}}님의 복약 정보</h2>
+
+<!-- 고객 정보 수정 버튼 -->
+<div style="margin-bottom: 10px;">
+  <a href="{{ url_for('edit_customer', customer_id=customer[0]) }}">고객 정보 수정</a>
+</div>
+
+
+<div style="display: flex; gap: 20px; align-items: center; font-weight: bold; margin-bottom: 10px;">
+  <div>시작일: {{customer[3]}}</div>
+  <div>기본 주기: 4주</div>
+  <div>📅 다음 복약일: {{next_date}}</div>
+  <div>알림일: {{alert_date}}</div>
+  <div style="color: '{% if d_day < 0 %}red{% elif d_day == 0 %}orange{% else %}green{% endif %}';">
+    D-day: {% if d_day < 0 %}D+{{d_day | abs}}{% elif d_day == 0 %}D-day{% else %}D-{{d_day}}{% endif %}
+  </div>
+</div>
+
+{% if 1<= d_day <= 7 %}
+<script>
+  alert("⚠️ {{ customer[1] }}님의 예정 수령일이 {{ d_day }}일 남았습니다!");
+</script>
+{% elif d_day == 0 %}
+<script>
+  alert("📌 {{ customer[1] }}님의 예정 수령일이 오늘입니다!");
+</script>
+{% elif d_day < 0 %}
+<script>
+  alert("⛔ {{customer[1]}}님의 예정 수령일 {{d_day | abs}}일 지났습니다!")
+</script>
+{% endif %}
+
+<h3>복약 기록</h3>
+<table style="width:100%; border-collapse: collapse;">
+  <thead>
+    <tr style="background-color: #f0f0f0;">
+      <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">복약일</th>
+      <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">수령분</th>
+      <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">추가 주차</th>
+      <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">비고</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for log in logs %}
+    <tr style="border-bottom: 1px solid #ddd;">
+      <td style="padding: 8px;">{{ log[1] }}</td> <!-- taken_date -->
+      <td style="padding: 8px; font-style: italic; color: #666;">{{ log[2] }}</td> <!-- taken_week -->
+      <td style="padding: 8px;">{{ log[4] if log|length > 4 else 0 }}</td> <!-- extra_weeks -->
+      <td style="padding: 8px;">{{ log[3] }}</td> <!-- note -->
+      <td style="padding: 8px;">
+        <a href="{{ url_for('edit_dose_log',customer_id=customer[0], log_id=log[0]) }}">수정</a>
+        <form action="{{ url_for('delete_dose_log', customer_id=customer[0], log_id=log[0]) }}" method="POST" style="display:inline;">
+          <button type="submit" onclick="return confirm('정말 삭제할까요?');">삭제</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3>복약 기록 추가</h3>
+
+<form method="POST" action="/add_dose_log/{{customer[0]}}">
+  복약일: <input type="date" name="taken_date" required> 
+  수령분(주 단위): <input type="number" name="taken_week" value="4" min="1" required> 
+  비고: <input name="note">
+  <button type="submit">복약 기록 추가</button>
+</form>
+
+<a href="/">← 돌아가기</a>

@@ -1,0 +1,20 @@
+<h2>고객 정보 수정</h2>
+<form method="POST">
+  <label>
+    이름:
+    <input type="text" name="name" value="{{ customer[1] }}" required {% if error_message %} style="border:1px solid red;" {% endif %}>
+    {% if error_message %}
+      <span style="color:red; font-size:0.9em;">{{ error_message }}</span>
+    {% endif %}
+  </label>
+  <br><br>
+
+  <label>
+    연락처:
+    <input type="text" name="contact" value="{{ customer[2] }}">
+  </label>
+  <br><br>
+
+  <button type="submit">저장</button>
+  <a href="{{ url_for('view_customer', customer_id=customer[0]) }}">취소</a>
+</form>

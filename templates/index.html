@@ -1,3 +1,25 @@
+<div class="stats-container" style="display: flex; gap: 20px; margin-bottom: 20px;">
+  <div class="stat-card" style="flex: 1; padding: 15px; background-color: #f0f8ff; border-radius: 10px; text-align: center;">
+    <h3>👥 전체 고객</h3>
+    <p style="font-size: 24px; font-weight: bold;">{{ stats.total }}</p>
+  </div>
+
+  <div class="stat-card" style="flex: 1; padding: 15px; background-color: #fff0f5; border-radius: 10px; text-align: center;">
+    <h3>⏳ 7일 이내 예정</h3>
+    <p style="font-size: 24px; font-weight: bold; color: #ff4500;">{{ stats.due_soon }}</p>
+  </div>
+
+  <div class="stat-card" style="flex: 1; padding: 15px; background-color: #e6ffe6; border-radius: 10px; text-align: center;">
+    <h3>📅 오늘 수령</h3>
+    <p style="font-size: 24px; font-weight: bold; color: #008000;">{{ stats.due_today }}</p>
+  </div>
+
+  <div class="stat-card" style="flex: 1; padding: 15px; background-color: #ffe4e1; border-radius: 10px; text-align: center;">
+    <h3>⚠️ 수령 지연</h3>
+    <p style="font-size: 24px; font-weight: bold; color: #b22222;">{{ stats.overdue }}</p>
+  </div>
+</div>
+
 <h2>고객 추가</h2>
 <form method="POST" action="/add_customer">
   이름: <input name="name" required> 연락처: <input name="contact">
@@ -34,3 +56,106 @@
     <button type="button">고객 관리</button>
   </a>
 </div>
+
+<!-- 📊 통계 요약 섹션 -->
+<div class="dashboard">
+  <h2>📊 복용 현황 요약</h2>
+  <div class="stats-container">
+    <div class="stat-card">
+      <h3>전체 고객 수</h3>
+      <p id="total_customers">-</p>
+    </div>
+    <div class="stat-card">
+      <h3>임박 알림 고객</h3>
+      <p id="imminent_alerts">-</p>
+    </div>
+    <div class="stat-card">
+      <h3>기한 초과 고객</h3>
+      <p id="overdue_customers">-</p>
+    </div>
+    <div class="stat-card">
+      <h3>추가 수령 주차 합계</h3>
+      <p id="total_extra_weeks">-</p>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- 📅 캘린더 섹션 -->
+<h2>📆 고객별 다음 수령 일정</h2>
+<div id="calendar"></div>
+
+<!-- ✅ Chart.js + FullCalendar.js 라이브러리 추가 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  fetch("/dashboard_data")
+    .then(res => res.json())
+    .then(data => {
+      // 📊 통계 표시
+      document.getElementById("total_customers").textContent = data.total_customers;
+      document.getElementById("imminent_alerts").textContent = data.imminent_alerts;
+      document.getElementById("overdue_customers").textContent = data.overdue_customers;
+      document.getElementById("total_extra_weeks").textContent = data.total_extra_weeks;
+
+      // 📆 FullCalendar 표시
+      const events = data.customers
+        .filter(c => c.next_due_date)
+        .map(c => ({
+          title: `${c.name} (D${c.d_day >= 0 ? "-" + c.d_day : "+" + Math.abs(c.d_day)})`,
+          start: c.next_due_date,
+          color: c.d_day < 0 ? "#ff6b6b" : (c.d_day <= 7 ? "#ffa502" : "#2ed573")
+        }));
+
+      const calendarEl = document.getElementById("calendar");
+      const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: "dayGridMonth",
+        events: events,
+        height: "auto",
+        eventClick: function(info) {
+          const customerName = info.event.title.split(" (")[0];
+          alert(`${customerName}님의 다음 수령일: ${info.event.start.toISOString().split("T")[0]}`);
+        }
+      });
+      calendar.render();
+    });
+});
+</script>
+
+<style>
+.dashboard {
+  margin: 30px 0;
+}
+.stats-container {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+.stat-card {
+  flex: 1;
+  min-width: 180px;
+  background: #f7f9fc;
+  border: 1px solid #e1e4e8;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.stat-card h3 {
+  margin-bottom: 8px;
+  font-size: 1.1rem;
+  color: #333;
+}
+.stat-card p {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #007bff;
+}
+#calendar {
+  margin-top: 20px;
+}
+</style>

@@ -157,6 +157,8 @@ def run_checks_now():
 # --- 홈 ---
 @app.route('/')
 def index():
+    today = datetime.today().date()
+
     with sqlite3.connect('medication.db') as conn:
         c = conn.cursor()
         c.execute('SELECT * FROM Customers WHERE is_active=1 ORDER BY name COLLATE NOCASE ASC')
@@ -165,33 +167,50 @@ def index():
         customer_list = []
         for customer in customers:
             customer_id = customer[0]
+            name = customer[1]
+            contact = customer[2]
+            start_date = customer[3]
+            next_due_date = customer[5] if len(customer) > 5 else None  # next_due_date 칼럼
 
-            # 해당 고객의 마지막 복약 기록 가져오기
-            c.execute("SELECT taken_date, taken_week FROM DoseLogs WHERE customer_id=? ORDER BY taken_date DESC LIMIT 1", (customer_id,))
-            last_log = c.fetchone()
-
-            if last_log:
-                taken_date = datetime.strptime(last_log[0], "%Y-%m-%d").date()
-                taken_week = int(last_log[1])
-                next_date = taken_date + timedelta(weeks=taken_week)
-                today = datetime.today().date()
-                d_day = (next_date - today).days
+            if next_due_date:
+                next_date = datetime.strptime(next_due_date, "%Y-%m-%d").date()
             else:
-                # 기록 없으면 시작일 기준으로 계산
-                start_date = datetime.strptime(customer[3], "%Y-%m-%d").date()
-                next_date = start_date + timedelta(weeks=4)
-                today=datetime.today().date()
-                d_day = (next_date - today).days
+                # next_due_date가 없을 경우 DoseLogs에서 계산
+                c.execute("SELECT taken_date, taken_week FROM DoseLogs WHERE customer_id=? ORDER BY taken_date DESC LIMIT 1", (customer_id,))
+                last_log = c.fetchone()
+                if last_log:
+                    taken_date = datetime.strptime(last_log[0], "%Y-%m-%d").date()
+                    taken_week = int(last_log[1])
+                    next_date = taken_date + timedelta(weeks=taken_week)
+                else:
+                    next_date = datetime.strptime(start_date, "%Y-%m-%d").date() + timedelta(weeks=4)
 
-            # 고객 정보 + D-day 추가
+            d_day = (next_date - today).days
+
             customer_list.append({
-                "id": customer[0],
-                "name": customer[1],
-                "phone": customer[2],
-                "start_date": customer[3],
+                "id": customer_id,
+                "name": name,
+                "phone": contact,
+                "start_date": start_date,
+                "next_date": next_date,
                 "d_day": d_day
             })
-    return render_template('index.html', customers=customer_list)
+
+        # --- 통계 계산 ---
+        total_customers = len(customer_list)
+        due_soon = sum(1 for c in customer_list if c["d_day"] is not None and 0 < c["d_day"] <= 7)
+        due_today = sum(1 for c in customer_list if c["d_day"] is not None and c["d_day"] == 0)
+        overdue = sum(1 for c in customer_list if c["d_day"] is not None and c["d_day"] < 0)
+
+    stats = {
+        "total": total_customers,
+        "due_soon": due_soon,
+        "due_today": due_today,
+        "overdue": overdue
+    }
+
+    return render_template('index.html', customers=customer_list, stats=stats)
+
 
 # --- 고객 추가 ---
 @app.route('/add_customer', methods=['POST'])
@@ -215,11 +234,18 @@ def add_customer():
                 message=f"⚠️ '{name}' 고객은 이미 존재합니다!"
             )
         
-        c.execute('INSERT INTO Customers (name, contact, start_date) VALUES (?, ?, ?)',
-                  (name, contact, start_date))
-        customer_id=c.lastrowid
-        c.execute('INSERT INTO DoseLogs (customer_id,taken_date,taken_week,note) VALUES(?,?,?,?)',
-                  (customer_id,start_date,first_weeks,'첫 복용'))
+        # 다음 복용일 계산
+        next_due_date = (datetime.strptime(start_date, "%Y-%m-%d") + timedelta(weeks=first_weeks)).date()
+
+        # Customers 테이블에 저장
+        c.execute('INSERT INTO Customers (name, contact, start_date, next_due_date) VALUES (?, ?, ?, ?)',
+                (name, contact, start_date, next_due_date.isoformat()))
+        customer_id = c.lastrowid
+
+        # DoseLogs 초기 기록 저장
+        c.execute('INSERT INTO DoseLogs (customer_id, taken_date, taken_week, note) VALUES (?, ?, ?, ?)',
+                (customer_id, start_date, first_weeks, '첫 복용'))
+
         conn.commit()
     return redirect(url_for('index'))
 
@@ -233,6 +259,13 @@ def add_dose_log(customer_id):
         c = conn.cursor()
         c.execute('INSERT INTO DoseLogs (customer_id, taken_date, taken_week,note) VALUES (?, ?, ?, ?)',
                   (customer_id, taken_date, taken_week, note))
+        
+        # 새로운 복약 기록을 추가한 뒤 next_due_date 갱신
+        next_due_date = (datetime.strptime(taken_date, "%Y-%m-%d") + timedelta(weeks=taken_week)).date()
+
+        c.execute('UPDATE Customers SET next_due_date = ? WHERE id = ?',
+                (next_due_date.isoformat(), customer_id))
+        
         conn.commit()
     return redirect(url_for('view_customer', customer_id=customer_id))
 
@@ -322,6 +355,17 @@ def migrate_db():
                 print("extra_weeks 칼럼이 이미 존재합니다. 건너뜁니다.")
             else:
                 raise
+        
+        # Customers 테이블에 next_due_date 컬럼 추가
+        try:
+            c.execute("ALTER TABLE Customers ADD COLUMN next_due_date DATE;")
+            print("next_due_date 칼럼이 추가되었습니다.")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e):
+                print("next_due_date 칼럼이 이미 존재합니다. 건너뜁니다.")
+            else:
+                raise
+
 
         conn.commit()
 
@@ -375,6 +419,12 @@ def edit_dose_log(customer_id,log_id):
                 SET taken_date=?, taken_week=?, extra_weeks=?, note=?
                 WHERE id=?
             """, (taken_date, taken_week, extra_weeks, note, log_id))
+            # 수정된 복약 기록 기준으로 next_due_date 갱신
+            latest_date = datetime.strptime(taken_date, "%Y-%m-%d")
+            next_due_date = (latest_date + timedelta(weeks=taken_week + extra_weeks)).date()
+
+            cursor.execute("UPDATE Customers SET next_due_date=? WHERE id=?", (next_due_date.isoformat(), customer_id))
+
             conn.commit()
             return redirect(url_for("view_customer", customer_id=customer_id))
 
@@ -394,6 +444,51 @@ def delete_dose_log(customer_id,log_id):
         conn.commit()
 
         return redirect(url_for("view_customer",customer_id=customer_id))
+
+@app.route("/dashboard_data")
+def dashboard_data():
+    today = datetime.today().date()
+    with sqlite3.connect("medication.db") as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        # 활성 고객만 대상으로
+        cur.execute("SELECT id, name, next_due_date FROM Customers WHERE is_active=1")
+        customers = cur.fetchall()
+
+        data = []
+        for c in customers:
+            if c["next_due_date"]:
+                next_due = datetime.strptime(c["next_due_date"], "%Y-%m-%d").date()
+                d_day = (next_due - today).days
+            else:
+                d_day = None
+
+            data.append({
+                "id": c["id"],
+                "name": c["name"],
+                "next_due_date": c["next_due_date"],
+                "d_day": d_day
+            })
+
+        # ---- 통계 계산 ----
+        total_customers = len(data)
+        imminent = sum(1 for d in data if d["d_day"] is not None and 0 <= d["d_day"] <= 7)
+        overdue = sum(1 for d in data if d["d_day"] is not None and d["d_day"] < 0)
+
+        # 여행(추가 수령) 통계 계산
+        cur.execute("SELECT SUM(extra_weeks) as total_extra FROM DoseLogs")
+        extra_result = cur.fetchone()
+        total_extra_weeks = extra_result["total_extra"] or 0
+
+    return {
+        "total_customers": total_customers,
+        "imminent_alerts": imminent,
+        "overdue_customers": overdue,
+        "total_extra_weeks": total_extra_weeks,
+        "customers": data
+    }
+
 
 # 앱 실행 전 DB 초기화
 if __name__ == '__main__':

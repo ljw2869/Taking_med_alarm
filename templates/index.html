@@ -118,7 +118,7 @@ document.addEventListener("DOMContentLoaded", function() {
         height: "auto",
         eventClick: function(info) {
           const customerName = info.event.title.split(" (")[0];
-          alert(`${customerName}님의 다음 수령일: ${info.event.start.toISOString().split("T")[0]}`);
+          alert(`${customerName}님의 다음 수령일: ${info.event.startStr}`);
         }
       });
       calendar.render();
